@@ -330,10 +330,14 @@ class JobManager:
             if job.cancel.is_set():
                 job.status, job.message = "canceled", "Цуцалсан"
                 return
-            job.status, job.message = "downloading", "Эхэлж байна…"
+            job.status, job.message = "downloading", "Холбогдож байна…"
+            stop_monitor = threading.Event()
+            monitor_t = threading.Thread(target=self._monitor_progress, args=(job, stop_monitor), daemon=True)
             try:
                 os.makedirs(job.out_dir, exist_ok=True)
-                with yt_dlp.YoutubeDL(self._options(job)) as ydl:
+                opts = self._options(job)
+                monitor_t.start()
+                with yt_dlp.YoutubeDL(opts) as ydl:
                     info = ydl.extract_info(job.req["url"], download=True)
                 if job.req.get("playlist"):
                     title = (info or {}).get("title") or "Playlist"
@@ -346,15 +350,52 @@ class JobManager:
                 job.speed = job.eta = None
             except yt_dlp.utils.DownloadCancelled:
                 job.status, job.message, job.speed, job.eta = "canceled", "Цуцалсан", None, None
-                self._cleanup(job)
             except Exception as e:  # noqa: BLE001
                 if job.cancel.is_set():
                     job.status, job.message = "canceled", "Цуцалсан"
-                    self._cleanup(job)
                 else:
                     job.status, job.error = "error", friendly_error(e)
                     job.message = job.error
                 job.speed = job.eta = None
+            finally:
+                stop_monitor.set()
+                self._cleanup(job)
+
+    def _monitor_progress(self, job: Job, stop_ev: threading.Event):
+        prog_file = getattr(job, "_prog_file", None)
+        sec_start = job.req.get("start") or 0
+        sec_end = job.req.get("end")
+        sec_len = (sec_end - sec_start) if sec_end else None
+
+        while not stop_ev.is_set():
+            time.sleep(0.4)
+            if job.status != "downloading":
+                break
+            if prog_file and os.path.isfile(prog_file):
+                try:
+                    with open(prog_file, "r", encoding="utf-8", errors="ignore") as f:
+                        lines = f.readlines()[-25:]
+                    vals = {}
+                    for line in lines:
+                      if "=" in line:
+                        k, v = line.strip().split("=", 1)
+                        vals[k] = v
+                    out_us = int(vals.get("out_time_us") or vals.get("out_time_ms", 0))
+                    cur_sec = out_us / 1000000.0
+                    total_b = int(vals.get("total_size") or 0)
+                    speed_val = vals.get("speed", "").strip()
+
+                    if sec_len and sec_len > 0:
+                        pct = min(99.0, (cur_sec / sec_len) * 100.0)
+                        job.progress = max(job.progress, pct)
+                        mb = f" · {total_b / 1048576:.1f} MB" if total_b else ""
+                        sp = f" · {speed_val}" if speed_val else ""
+                        job.message = f"{fmt_time(cur_sec)} / {fmt_time(sec_len)}{mb}{sp}"
+                    elif cur_sec > 0:
+                        mb = f" ({total_b / 1048576:.1f} MB)" if total_b else ""
+                        job.message = f"{fmt_time(cur_sec)} татсан{mb}"
+                except Exception:
+                    pass
 
     @staticmethod
     def _cleanup(job: Job):
@@ -365,6 +406,12 @@ class JobManager:
                         os.remove(p)
                 except OSError:
                     pass
+        prog_file = getattr(job, "_prog_file", None)
+        if prog_file and os.path.isfile(prog_file):
+            try:
+                os.remove(prog_file)
+            except OSError:
+                pass
 
     def _options(self, job: Job) -> dict:
         r = job.req
@@ -379,6 +426,10 @@ class JobManager:
                 name += f" [{fmt_time(start or 0, '-')}_{fmt_time(end, '-') if end is not None else 'end'}]"
             outtmpl = os.path.join(job.out_dir, name + ".%(ext)s")
 
+        import tempfile
+        prog_file = os.path.join(tempfile.gettempdir(), f"tatagch_prog_{job.id}.txt")
+        job._prog_file = prog_file
+
         opts: dict = {
             "outtmpl": outtmpl,
             "ffmpeg_location": FFMPEG_PATH,
@@ -392,6 +443,10 @@ class JobManager:
             "post_hooks": [lambda path: setattr(job, "filepath", path)],
             "retries": 5,
             "fragment_retries": 5,
+            "external_downloader_args": {
+                "ffmpeg": ["-progress", prog_file],
+                "default": ["-progress", prog_file],
+            },
         }
         if r.get("playlist") and r.get("items"):
             opts["playlist_items"] = ",".join(str(int(i)) for i in r["items"])
@@ -407,7 +462,6 @@ class JobManager:
                 yield {"start_time": s, "end_time": stop}
 
             opts["download_ranges"] = ranges
-            opts["force_keyframes_at_cuts"] = True
 
         if r.get("mode") == "audio":
             codec = r.get("audio_format") or "mp3"

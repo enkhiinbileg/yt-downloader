@@ -880,11 +880,15 @@ function statusText(j) {
   switch (j.status) {
     case 'queued': return `${ic('clock')}Дараалалд хүлээж байна`;
     case 'downloading': {
-      if (j.message) return esc(item + j.message);
-      const parts = [`${Math.floor(j.progress)}%`];
-      if (j.speed) parts.push(fmtSize(j.speed) + '/s');
-      if (j.eta != null) parts.push(fmtEta(j.eta) + ' үлдсэн');
-      return esc(item + parts.join(' · '));
+      const parts = [];
+      if (j.progress > 0) parts.push(`${Math.floor(j.progress)}%`);
+      if (j.message) {
+        parts.push(j.message);
+      } else {
+        if (j.speed) parts.push(fmtSize(j.speed) + '/s');
+        if (j.eta != null) parts.push(fmtEta(j.eta) + ' үлдсэн');
+      }
+      return esc(item + (parts.join(' · ') || 'Татаж байна…'));
     }
     case 'processing': return esc(item + (j.message || 'Боловсруулж байна…'));
     case 'done': return `${ic('checkCircle')}Дууссан`;
