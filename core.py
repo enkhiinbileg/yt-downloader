@@ -477,8 +477,6 @@ class JobManager:
             "retries": 10,
             "fragment_retries": 10,
             "concurrent_fragment_downloads": 8,
-            "http_chunk_size": 10485760,
-            "buffersize": 1048576,
             "external_downloader_args": {
                 "ffmpeg_i": [
                     "-reconnect", "1",
