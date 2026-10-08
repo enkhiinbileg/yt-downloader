@@ -108,7 +108,7 @@ def api_job_action(job_id, action):
     elif action == "remove":
         jobs.remove(job_id)
     elif action == "open":
-        core.open_path(job.filepath)
+        core.open_path(job.filepath or job.out_dir)
     elif action == "reveal":
         core.reveal_in_explorer(job.filepath or job.out_dir)
     else:

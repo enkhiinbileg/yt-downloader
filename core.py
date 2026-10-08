@@ -383,7 +383,12 @@ class JobManager:
                 elif not job.filepath and info:
                     rd = info.get("requested_downloads") or []
                     if rd:
-                        job.filepath = rd[0].get("filepath")
+                        job.filepath = rd[0].get("filepath") or rd[0].get("filename")
+                if job.filepath and not os.path.exists(job.filepath) and os.path.exists(job.filepath + ".part"):
+                    try:
+                        os.replace(job.filepath + ".part", job.filepath)
+                    except OSError:
+                        pass
                 job.status, job.progress, job.message = "done", 100.0, "Дууслаа"
                 job.speed = job.eta = None
             except yt_dlp.utils.DownloadCancelled:
@@ -444,6 +449,23 @@ class JobManager:
 
     @staticmethod
     def _cleanup(job: Job):
+        prog_file = getattr(job, "_prog_file", None)
+        if prog_file and os.path.isfile(prog_file):
+            try:
+                os.remove(prog_file)
+            except OSError:
+                pass
+
+        if job.status == "done":
+            if job.filepath and not os.path.exists(job.filepath):
+                part = job.filepath + ".part"
+                if os.path.exists(part):
+                    try:
+                        os.replace(part, job.filepath)
+                    except OSError:
+                        pass
+            return
+
         for f in job._tmp_files:
             for p in (f, f + ".part", f + ".ytdl"):
                 try:
@@ -451,12 +473,6 @@ class JobManager:
                         os.remove(p)
                 except OSError:
                     pass
-        prog_file = getattr(job, "_prog_file", None)
-        if prog_file and os.path.isfile(prog_file):
-            try:
-                os.remove(prog_file)
-            except OSError:
-                pass
 
     def _options(self, job: Job) -> dict:
         r = job.req
@@ -482,6 +498,7 @@ class JobManager:
             "outtmpl": outtmpl,
             "ffmpeg_location": FFMPEG_PATH,
             "windowsfilenames": True,
+            "nopart": True,
             "noplaylist": not r.get("playlist"),
             "progress_hooks": [lambda d: self._on_progress(job, d)],
             "postprocessor_hooks": [lambda d: self._on_pp(job, d)],
@@ -601,16 +618,46 @@ class JobManager:
 
 # ---------------------------------------------------------------- OS helpers
 def reveal_in_explorer(path: str):
-    if path and os.path.exists(path):
+    if not path:
+        return
+    if os.path.exists(path):
         if os.path.isdir(path):
             os.startfile(path)
         else:
             subprocess.Popen(f'explorer /select,"{os.path.normpath(path)}"')
+        return
+    part_path = path + ".part"
+    if os.path.exists(part_path):
+        try:
+            os.replace(part_path, path)
+            subprocess.Popen(f'explorer /select,"{os.path.normpath(path)}"')
+            return
+        except Exception:
+            subprocess.Popen(f'explorer /select,"{os.path.normpath(part_path)}"')
+            return
+    parent = os.path.dirname(path) if not os.path.isdir(path) else path
+    if parent and os.path.exists(parent):
+        os.startfile(parent)
 
 
 def open_path(path: str):
-    if path and os.path.exists(path):
+    if not path:
+        return
+    if os.path.exists(path):
         os.startfile(path)
+        return
+    part_path = path + ".part"
+    if os.path.exists(part_path):
+        try:
+            os.replace(part_path, path)
+            os.startfile(path)
+            return
+        except Exception:
+            os.startfile(part_path)
+            return
+    parent = os.path.dirname(path)
+    if parent and os.path.exists(parent):
+        os.startfile(parent)
 
 
 def read_clipboard() -> str:
