@@ -418,13 +418,20 @@ class JobManager:
                     out_us = int(vals.get("out_time_us") or vals.get("out_time_ms", 0))
                     cur_sec = out_us / 1000000.0
                     total_b = int(vals.get("total_size") or 0)
-                    speed_val = vals.get("speed", "").strip()
+                    speed_mult = None
+                    if speed_val and "x" in speed_val:
+                        try:
+                            speed_mult = float(speed_val.replace("x", "").strip())
+                        except ValueError:
+                            pass
 
                     if sec_len and sec_len > 0:
                         pct = min(99.0, (cur_sec / sec_len) * 100.0)
                         job.progress = max(job.progress, pct)
                         mb = f" · {total_b / 1048576:.1f} MB" if total_b else ""
                         sp = f" · {speed_val}" if speed_val else ""
+                        if speed_mult and speed_mult > 0 and cur_sec < sec_len:
+                            job.eta = int((sec_len - cur_sec) / speed_mult)
                         job.message = f"{fmt_time(cur_sec)} / {fmt_time(sec_len)}{mb}{sp}"
                     elif cur_sec > 0:
                         mb = f" ({total_b / 1048576:.1f} MB)" if total_b else ""
