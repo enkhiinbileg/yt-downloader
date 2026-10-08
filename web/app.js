@@ -248,7 +248,7 @@ function bindSegmented(onChange) {
 function fpsSegmentedHTML() {
   return `
     <div id="fpsSection" class="${S.mode === 'audio' ? 'hidden' : ''}">
-      <div class="field-label"><span>Кадрын хурд (FPS)</span><span class="hint">30 FPS нь хэмжээ бага, түргэн татна</span></div>
+      <div class="field-label"><span>Кадрын хурд (FPS)</span><span class="hint" id="fpsHint">30 FPS нь хэмжээ бага, түргэн татна</span></div>
       <div class="segmented" id="fpsSeg" role="group" aria-label="FPS">
         <div class="seg-thumb"></div>
         <button class="seg" data-fps="30" aria-pressed="${S.fps === '30'}">${ic('zap')}30 FPS <span class="seg-sub">Санал болгох</span></button>
@@ -420,7 +420,12 @@ function bindAudioChips(box, after) {
 function currentLabel() {
   if (S.mode === 'audio') return `${S.audio.name} · ${S.audio.sub}`;
   const q = S.quality;
-  const fpsBadge = S.fps === '30' ? ' · 30fps' : (q && q.fps > 30 ? ' · 60fps' : '');
+  let fpsBadge = '';
+  if (q && q.fps > 30) {
+    fpsBadge = S.fps === '30' ? ' · 60fps (зөвхөн 60fps)' : ' · 60fps';
+  } else if (S.fps === '30') {
+    fpsBadge = ' · 30fps';
+  }
   return `MP4 · ${q ? q.label : 'Хамгийн сайн'}${q && q.badge ? ' ' + q.badge : ''}${fpsBadge}`;
 }
 
@@ -436,6 +441,17 @@ function updateVideoSummary() {
   if (len) parts.push(`${fmtTime(len)} урт`);
   if (S.trim) parts.push(`${fmtTime(S.start)} – ${fmtTime(S.end)}`);
   $('#sumSub').textContent = parts.join('  ·  ') || 'Бэлэн';
+
+  const hint = $('#fpsHint');
+  if (hint && S.mode === 'video') {
+    if (S.quality && S.quality.fps > 30 && S.fps === '30') {
+      hint.textContent = `${S.quality.label} нь YouTube дээр зөвхөн 60 FPS дээр байршсан байна`;
+      hint.style.color = 'var(--accent)';
+    } else {
+      hint.textContent = '30 FPS нь хэмжээ бага, түргэн татна';
+      hint.style.color = '';
+    }
+  }
 }
 
 async function downloadVideo() {

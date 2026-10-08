@@ -180,15 +180,35 @@ def _video_info(info: dict, url: str) -> dict:
             continue
         cur = by_height.get(h)
         size = _size(f, duration)
-        if not cur or size > cur["vsize"]:
-            short_side = min(h, w) if w else h
+        is_h264 = "avc" in (f.get("vcodec") or "").lower()
+        cur_is_h264 = "avc" in (cur.get("vcodec") or "").lower() if cur else False
+        has_real_size = bool(f.get("filesize"))
+        cur_has_real_size = bool(cur.get("has_real_size")) if cur else False
+
+        should_replace = False
+        if not cur:
+            should_replace = True
+        elif is_h264 and not cur_is_h264:
+            should_replace = True
+        elif is_h264 == cur_is_h264 and has_real_size and not cur_has_real_size:
+            should_replace = True
+        elif is_h264 == cur_is_h264 and (has_real_size == cur_has_real_size) and size > cur["vsize"]:
+            should_replace = True
+
+        short_side = min(h, w) if w else h
+        fps_val = max(f.get("fps") or 0, (cur or {}).get("fps") or 0)
+        if should_replace:
             by_height[h] = {
                 "height": h,
                 "label": f"{short_side}p",
                 "short": short_side,
-                "fps": max(f.get("fps") or 0, (cur or {}).get("fps") or 0),
+                "fps": fps_val,
                 "vsize": size,
+                "vcodec": f.get("vcodec") or "",
+                "has_real_size": has_real_size,
             }
+        else:
+            cur["fps"] = fps_val
     qualities = []
     seen = set()
     for h in sorted(by_height, reverse=True):
@@ -479,12 +499,11 @@ class JobManager:
             h = r.get("height")
             fps = r.get("fps")
             lim = f"[height<={int(h)}]" if h else ""
+            opts["format"] = f"bestvideo{lim}+bestaudio/best{lim}/best"
             if fps:
                 fps_val = int(fps)
-                opts["format"] = f"bestvideo{lim}[fps<={fps_val}]+bestaudio/bestvideo{lim}+bestaudio/best"
                 opts["format_sort"] = ["res", f"fps:{fps_val}", "vcodec:h264", "acodec:m4a"]
             else:
-                opts["format"] = f"bestvideo{lim}+bestaudio/best{lim}/best"
                 opts["format_sort"] = ["res", "vcodec:h264", "acodec:m4a"]
             opts["merge_output_format"] = "mp4"
         return opts
