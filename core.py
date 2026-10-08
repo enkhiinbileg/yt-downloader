@@ -476,8 +476,17 @@ class JobManager:
             "post_hooks": [lambda path: setattr(job, "filepath", path)],
             "retries": 10,
             "fragment_retries": 10,
+            "concurrent_fragment_downloads": 8,
+            "http_chunk_size": 10485760,
+            "buffersize": 1048576,
             "external_downloader_args": {
-                "ffmpeg_i": ["-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "5"],
+                "ffmpeg_i": [
+                    "-reconnect", "1",
+                    "-reconnect_streamed", "1",
+                    "-reconnect_delay_max", "5",
+                    "-multiple_requests", "1",
+                    "-tcp_nodelay", "1",
+                ],
                 "ffmpeg": ["-progress", prog_file],
                 "default": ["-progress", prog_file],
             },
