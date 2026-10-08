@@ -118,6 +118,7 @@ const S = {
   info: null,
   token: 0,
   mode: localStorage.getItem('mode') || 'video',
+  fps: localStorage.getItem('fps') || '30',
   quality: null, // сонгосон quality объект
   audio: AUDIO_PRESETS.find((p) => p.id === localStorage.getItem('audio')) || AUDIO_PRESETS[1],
   trim: false,
@@ -237,9 +238,46 @@ function bindSegmented(onChange) {
     localStorage.setItem('mode', S.mode);
     $$('#modeSeg .seg').forEach((x) => x.setAttribute('aria-pressed', x === b));
     placeSegThumb();
+    $('#fpsSection')?.classList.toggle('hidden', S.mode === 'audio');
+    placeFpsThumb();
     onChange();
   }));
   requestAnimationFrame(placeSegThumb);
+}
+
+function fpsSegmentedHTML() {
+  return `
+    <div id="fpsSection" class="${S.mode === 'audio' ? 'hidden' : ''}">
+      <div class="field-label"><span>Кадрын хурд (FPS)</span><span class="hint">30 FPS нь хэмжээ бага, түргэн татна</span></div>
+      <div class="segmented" id="fpsSeg" role="group" aria-label="FPS">
+        <div class="seg-thumb"></div>
+        <button class="seg" data-fps="30" aria-pressed="${S.fps === '30'}">${ic('zap')}30 FPS <span class="seg-sub">Санал болгох</span></button>
+        <button class="seg" data-fps="60" aria-pressed="${S.fps === '60'}">60 FPS / Дээд <span class="seg-sub">Оригинал</span></button>
+      </div>
+    </div>`;
+}
+
+function placeFpsThumb() {
+  const seg = $('#fpsSeg');
+  if (!seg) return;
+  const on = seg.querySelector('[aria-pressed="true"]');
+  const th = seg.querySelector('.seg-thumb');
+  if (on && th) {
+    th.style.left = on.offsetLeft + 'px';
+    th.style.width = on.offsetWidth + 'px';
+  }
+}
+
+function bindFps(onChange) {
+  $$('#fpsSeg .seg').forEach((b) => (b.onclick = () => {
+    if (S.fps === b.dataset.fps) return;
+    S.fps = b.dataset.fps;
+    localStorage.setItem('fps', S.fps);
+    $$('#fpsSeg .seg').forEach((x) => x.setAttribute('aria-pressed', x === b));
+    placeFpsThumb();
+    onChange();
+  }));
+  requestAnimationFrame(placeFpsThumb);
 }
 
 function chipHTML({ key, title, badge, sub, pressed }) {
@@ -311,6 +349,7 @@ function renderVideo(v) {
           <div class="field-label"><span id="chipsLabel">Чанар</span><span class="hint" id="chipsHint"></span></div>
           <div class="chips" id="chips"></div>
         </div>
+        ${fpsSegmentedHTML()}
         ${canTrim ? trimHTML(v.duration) : ''}
       </div>
 
@@ -324,6 +363,7 @@ function renderVideo(v) {
     </div>`;
 
   bindSegmented(() => { renderVideoChips(); updateVideoSummary(); });
+  bindFps(() => { updateVideoSummary(); });
   renderVideoChips();
   if (canTrim) bindTrim(v.duration);
   updateVideoSummary();
@@ -380,7 +420,8 @@ function bindAudioChips(box, after) {
 function currentLabel() {
   if (S.mode === 'audio') return `${S.audio.name} · ${S.audio.sub}`;
   const q = S.quality;
-  return `MP4 · ${q ? q.label : 'Хамгийн сайн'}${q && q.badge ? ' ' + q.badge : ''}`;
+  const fpsBadge = S.fps === '30' ? ' · 30fps' : (q && q.fps > 30 ? ' · 60fps' : '');
+  return `MP4 · ${q ? q.label : 'Хамгийн сайн'}${q && q.badge ? ' ' + q.badge : ''}${fpsBadge}`;
 }
 
 function updateVideoSummary() {
@@ -408,6 +449,7 @@ async function downloadVideo() {
     thumbnail: v.thumbnail,
     mode: S.mode,
     height: S.mode === 'video' ? S.quality?.height ?? null : null,
+    fps: S.mode === 'video' ? parseInt(S.fps, 10) : null,
     audio_format: S.audio.fmt,
     bitrate: S.audio.br,
     start: full ? null : S.start,
@@ -696,6 +738,7 @@ function renderPlaylist(p) {
       </div>
       <div class="opts">
         <div><div class="field-label">Төрөл</div>${segmentedHTML()}</div>
+        ${fpsSegmentedHTML()}
         <div><div class="field-label"><span id="chipsLabel">Чанар</span><span class="hint" id="chipsHint"></span></div><div class="chips" id="chips"></div></div>
         <div>
           <div class="pl-list-head">
@@ -721,6 +764,7 @@ function renderPlaylist(p) {
     </div>`;
 
   bindSegmented(() => { renderPlaylistChips(); updatePlaylistSummary(); });
+  bindFps(() => { updatePlaylistSummary(); });
   renderPlaylistChips();
 
   $('#plList').addEventListener('click', (e) => {
@@ -776,7 +820,9 @@ function syncPlaylistSel() {
 }
 
 function playlistLabel() {
-  return S.mode === 'audio' ? `${S.audio.name} · ${S.audio.sub}` : `MP4 · ${S.quality.label}`;
+  if (S.mode === 'audio') return `${S.audio.name} · ${S.audio.sub}`;
+  const fpsText = S.fps === '30' ? ' · 30fps' : '';
+  return `MP4 · ${S.quality.label}${fpsText}`;
 }
 
 function updatePlaylistSummary() {
@@ -799,6 +845,7 @@ async function downloadPlaylist() {
       title: p.title, thumbnail: p.thumbnail,
       mode: S.mode,
       height: S.mode === 'video' ? S.quality.height : null,
+      fps: S.mode === 'video' && S.fps ? parseInt(S.fps, 10) : null,
       audio_format: S.audio.fmt, bitrate: S.audio.br,
       label: `Playlist · ${S.sel.size} видео · ${playlistLabel()}`,
     });

@@ -477,9 +477,15 @@ class JobManager:
             opts["writethumbnail"] = True
         else:
             h = r.get("height")
+            fps = r.get("fps")
             lim = f"[height<={int(h)}]" if h else ""
-            opts["format"] = f"bestvideo{lim}+bestaudio/best{lim}/best"
-            opts["format_sort"] = ["res", "vcodec:h264", "acodec:m4a"]
+            if fps:
+                fps_val = int(fps)
+                opts["format"] = f"bestvideo{lim}[fps<={fps_val}]+bestaudio/bestvideo{lim}+bestaudio/best"
+                opts["format_sort"] = ["res", f"fps:{fps_val}", "vcodec:h264", "acodec:m4a"]
+            else:
+                opts["format"] = f"bestvideo{lim}+bestaudio/best{lim}/best"
+                opts["format_sort"] = ["res", "vcodec:h264", "acodec:m4a"]
             opts["merge_output_format"] = "mp4"
         return opts
 
