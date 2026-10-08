@@ -59,7 +59,9 @@ _ERRORS = [
     ("getaddrinfo failed", "Интернэт холболтоо шалгана уу."),
     ("unable to download webpage", "Интернэт холболтоо шалгана уу."),
     ("timed out", "Холболт удаан байна. Дахин оролдоно уу."),
-    ("http error 403", "YouTube хандалтыг хаалаа. yt-dlp-г шинэчилж үзнэ үү."),
+    ("http error 403", "YouTube хандалтыг хаалаа (403 Forbidden). Түр хүлээгээд дахин оролдоно уу."),
+    ("403 forbidden", "YouTube хандалтыг хаалаа (403 Forbidden). Түр хүлээгээд дахин оролдоно уу."),
+    ("3436169992", "YouTube хандалтыг хаалаа (403 Forbidden). Түр хүлээгээд дахин оролдоно уу."),
     ("requested format is not available", "Сонгосон чанар энэ видеонд байхгүй байна."),
     ("no space left", "Диск дээр зай дууссан байна."),
     ("permission denied", "Хавтас руу бичих эрхгүй байна. Өөр хавтас сонгоно уу."),
@@ -119,6 +121,18 @@ def save_settings(patch: dict) -> dict:
         return data
 
 
+def _base_opts() -> dict:
+    opts: dict = {
+        "quiet": True,
+        "no_warnings": True,
+        "noprogress": True,
+    }
+    node_exe = shutil.which("node")
+    if node_exe:
+        opts["js_runtimes"] = {"node": {"path": node_exe}}
+    return opts
+
+
 # ---------------------------------------------------------------- info
 def _is_playlist_url(url: str) -> bool:
     return bool(re.search(r"youtube\.com/playlist\?", url)) or (
@@ -129,7 +143,8 @@ def _is_playlist_url(url: str) -> bool:
 def get_info(url: str, playlist: bool = False) -> dict:
     url = url.strip()
     playlist = playlist or _is_playlist_url(url)
-    opts = {"quiet": True, "no_warnings": True, "noprogress": True, "skip_download": True}
+    opts = _base_opts()
+    opts.update({"skip_download": True})
     if playlist:
         opts.update(extract_flat="in_playlist", noplaylist=False)
     else:
@@ -451,19 +466,18 @@ class JobManager:
         job._prog_file = prog_file
 
         opts: dict = {
+            **_base_opts(),
             "outtmpl": outtmpl,
             "ffmpeg_location": FFMPEG_PATH,
-            "quiet": True,
-            "no_warnings": True,
-            "noprogress": True,
             "windowsfilenames": True,
             "noplaylist": not r.get("playlist"),
             "progress_hooks": [lambda d: self._on_progress(job, d)],
             "postprocessor_hooks": [lambda d: self._on_pp(job, d)],
             "post_hooks": [lambda path: setattr(job, "filepath", path)],
-            "retries": 5,
-            "fragment_retries": 5,
+            "retries": 10,
+            "fragment_retries": 10,
             "external_downloader_args": {
+                "ffmpeg_i": ["-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "5"],
                 "ffmpeg": ["-progress", prog_file],
                 "default": ["-progress", prog_file],
             },
