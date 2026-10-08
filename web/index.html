@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="mn">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tatagch — YouTube татагч</title>
+  <link rel="stylesheet" href="style.css">
+  <script>
+    // Сэдвийг анивчилтгүй эрт тохируулах
+    document.documentElement.dataset.theme =
+      localStorage.getItem('theme') || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+  </script>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19h14" /></svg>
+        </div>
+        <div>
+          <div class="brand-name">Tatagch</div>
+          <div class="brand-sub">YouTube татагч</div>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button class="folder-btn" id="folderBtn" title="Хадгалах хавтас солих">
+          <span class="ic" data-ic="folder"></span>
+          <span class="folder-path" id="folderPath">…</span>
+          <span class="folder-change">Солих</span>
+        </button>
+        <button class="icon-btn" id="themeBtn" title="Цайвар / бараан горим" aria-label="Сэдэв солих">
+          <span class="ic" data-ic="sun"></span>
+        </button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="main-col">
+        <form class="search" id="searchForm" autocomplete="off">
+          <div class="search-box" id="searchBox">
+            <span class="ic search-ic" data-ic="link"></span>
+            <input id="urlInput" type="text" spellcheck="false"
+                   placeholder="YouTube линкээ энд буулгана уу…" aria-label="YouTube линк">
+            <button type="button" class="clear-btn hidden" id="clearUrl" aria-label="Цэвэрлэх">
+              <span class="ic" data-ic="x"></span>
+            </button>
+            <button type="button" class="ghost-btn" id="pasteBtn" title="Clipboard-оос буулгах (Ctrl+V)">
+              <span class="ic" data-ic="clipboard"></span><span class="hide-sm">Буулгах</span>
+            </button>
+            <button type="submit" class="primary-btn" id="fetchBtn">
+              <span class="ic" data-ic="search"></span><span>Хайх</span>
+            </button>
+          </div>
+          <div class="clip-suggest hidden" id="clipSuggest">
+            <span class="ic" data-ic="clipboard"></span>
+            <span class="clip-text">Хуулсан линк олдлоо: <b id="clipUrl"></b></span>
+            <button type="button" class="link-btn" id="clipUse">Ашиглах</button>
+            <button type="button" class="clip-x" id="clipDismiss" aria-label="Хаах"><span class="ic" data-ic="x"></span></button>
+          </div>
+        </form>
+
+        <div id="stage" class="stage" aria-live="polite"></div>
+      </section>
+
+      <aside class="side-col">
+        <div class="side-head">
+          <div class="side-title">
+            <span class="ic" data-ic="download"></span>
+            <h3>Татан авалтууд</h3>
+            <span class="count-badge hidden" id="activeCount">0</span>
+          </div>
+          <div class="side-actions">
+            <button class="icon-btn sm" id="openFolderBtn" title="Хавтас нээх"><span class="ic" data-ic="folder"></span></button>
+            <button class="icon-btn sm" id="clearJobsBtn" title="Дууссаныг цэвэрлэх"><span class="ic" data-ic="trash"></span></button>
+          </div>
+        </div>
+        <div class="job-list" id="jobList"></div>
+      </aside>
+    </main>
+
+    <div class="toasts" id="toasts" aria-live="polite"></div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
