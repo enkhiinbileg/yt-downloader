@@ -14,6 +14,7 @@ const ICONS = {
   clipboard: '<rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>',
   search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
   video: '<path d="m16 13 5.22 3.48a.5.5 0 0 0 .78-.42V7.87a.5.5 0 0 0-.75-.43L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/>',
+  mute: '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/>',
   music: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
   scissors: '<circle cx="6" cy="6" r="3"/><path d="M8.12 8.12 12 12"/><path d="M20 4 8.12 15.88"/><circle cx="6" cy="18" r="3"/><path d="M14.8 14.8 20 20"/>',
   download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
@@ -217,7 +218,8 @@ function segmentedHTML() {
   return `
     <div class="segmented" id="modeSeg" role="group" aria-label="Төрөл">
       <div class="seg-thumb"></div>
-      <button class="seg" data-mode="video" aria-pressed="${S.mode === 'video'}">${ic('video')}Видео <span class="seg-sub">MP4</span></button>
+      <button class="seg" data-mode="video" aria-pressed="${S.mode === 'video'}">${ic('video')}Видео <span class="seg-sub">Дуутай</span></button>
+      <button class="seg" data-mode="mute" aria-pressed="${S.mode === 'mute'}">${ic('mute')}Дуугүй <span class="seg-sub">Mute 🔇</span></button>
       <button class="seg" data-mode="audio" aria-pressed="${S.mode === 'audio'}">${ic('music')}Аудио <span class="seg-sub">MP3 / M4A</span></button>
     </div>`;
 }
@@ -377,20 +379,23 @@ function renderVideoChips() {
   const box = $('#chips');
   if (!box) return;
   const f = trimFactor();
-  if (S.mode === 'video') {
-    $('#chipsLabel').textContent = 'Видео чанар';
+  if (S.mode === 'video' || S.mode === 'mute') {
+    $('#chipsLabel').textContent = S.mode === 'mute' ? 'Видео чанар (Дуугүй 🔇)' : 'Видео чанар';
     $('#chipsHint').textContent = v.qualities.length ? `${v.qualities.length} сонголт` : '';
     if (!v.qualities.length) {
       box.innerHTML = chipHTML({ key: 'best', title: 'Хамгийн сайн', sub: 'Автомат', pressed: true });
       return;
     }
-    box.innerHTML = v.qualities.map((q) => chipHTML({
-      key: q.height,
-      title: q.label,
-      badge: [q.badge, q.fps > 30 ? `${q.fps}fps` : ''].filter(Boolean).join(' · '),
-      sub: q.size ? '≈ ' + fmtSize(q.size * f) : '—',
-      pressed: S.quality && S.quality.height === q.height,
-    })).join('');
+    box.innerHTML = v.qualities.map((q) => {
+      const sz = S.mode === 'mute' ? (q.vsize || (q.size ? Math.max(0, q.size - (v.audio_size || 0)) : null)) : q.size;
+      return chipHTML({
+        key: q.height,
+        title: q.label,
+        badge: [q.badge, q.fps > 30 ? `${q.fps}fps` : ''].filter(Boolean).join(' · '),
+        sub: sz ? '≈ ' + fmtSize(sz * f) : '—',
+        pressed: S.quality && S.quality.height === q.height,
+      });
+    }).join('');
     $$('.chip', box).forEach((c) => (c.onclick = () => {
       S.quality = v.qualities.find((q) => String(q.height) === c.dataset.key);
       localStorage.setItem('quality', parseInt(S.quality.label, 10));
@@ -426,7 +431,8 @@ function currentLabel() {
   } else if (S.fps === '30') {
     fpsBadge = ' · 30fps';
   }
-  return `MP4 · ${q ? q.label : 'Хамгийн сайн'}${q && q.badge ? ' ' + q.badge : ''}${fpsBadge}`;
+  const muteBadge = S.mode === 'mute' ? ' (дуугүй 🔇)' : '';
+  return `MP4${muteBadge} · ${q ? q.label : 'Хамгийн сайн'}${q && q.badge ? ' ' + q.badge : ''}${fpsBadge}`;
 }
 
 function updateVideoSummary() {
@@ -434,8 +440,17 @@ function updateVideoSummary() {
   if (!v || v.type !== 'video') return;
   const f = trimFactor();
   const len = S.trim ? S.end - S.start : v.duration;
-  const size = S.mode === 'audio' ? audioSize(S.audio, v.duration) * f : (S.quality?.size || 0) * f;
-  $('#sumMain').innerHTML = `${ic(S.mode === 'audio' ? 'music' : 'video')}${esc(currentLabel())}`;
+  let size = 0;
+  if (S.mode === 'audio') {
+    size = audioSize(S.audio, v.duration) * f;
+  } else if (S.mode === 'mute') {
+    const vs = S.quality?.vsize || (S.quality?.size ? Math.max(0, S.quality.size - (v.audio_size || 0)) : 0);
+    size = vs * f;
+  } else {
+    size = (S.quality?.size || 0) * f;
+  }
+  const icon = S.mode === 'audio' ? 'music' : (S.mode === 'mute' ? 'mute' : 'video');
+  $('#sumMain').innerHTML = `${ic(icon)}${esc(currentLabel())}`;
   const parts = [];
   if (size) parts.push('≈ ' + fmtSize(size));
   if (len) parts.push(`${fmtTime(len)} урт`);
@@ -443,7 +458,7 @@ function updateVideoSummary() {
   $('#sumSub').textContent = parts.join('  ·  ') || 'Бэлэн';
 
   const hint = $('#fpsHint');
-  if (hint && S.mode === 'video') {
+  if (hint && (S.mode === 'video' || S.mode === 'mute')) {
     if (S.quality && S.quality.fps > 30 && S.fps === '30') {
       hint.textContent = `${S.quality.label} нь YouTube дээр зөвхөн 60 FPS дээр байршсан байна`;
       hint.style.color = 'var(--accent)';
@@ -459,13 +474,14 @@ async function downloadVideo() {
   const btn = $('#dlBtn');
   if (btn.disabled) return;
   const full = !S.trim || (S.start <= 0 && S.end >= v.duration);
+  const isVid = S.mode === 'video' || S.mode === 'mute';
   const payload = {
     url: v.url,
     title: v.title,
     thumbnail: v.thumbnail,
     mode: S.mode,
-    height: S.mode === 'video' ? S.quality?.height ?? null : null,
-    fps: S.mode === 'video' ? parseInt(S.fps, 10) : null,
+    height: isVid ? S.quality?.height ?? null : null,
+    fps: isVid ? parseInt(S.fps, 10) : null,
     audio_format: S.audio.fmt,
     bitrate: S.audio.br,
     start: full ? null : S.start,
@@ -800,8 +816,8 @@ function renderPlaylist(p) {
 
 function renderPlaylistChips() {
   const box = $('#chips');
-  if (S.mode === 'video') {
-    $('#chipsLabel').textContent = 'Видео чанар';
+  if (S.mode === 'video' || S.mode === 'mute') {
+    $('#chipsLabel').textContent = S.mode === 'mute' ? 'Видео чанар (Дуугүй 🔇)' : 'Видео чанар';
     $('#chipsHint').textContent = 'Байхгүй бол хамгийн ойрын чанараар';
     box.innerHTML = PL_QUALITIES.map((q) => chipHTML({ key: q.height ?? 'best', title: q.label, badge: q.badge, sub: q.height ? `${q.height}p хүртэл` : 'Автомат', pressed: S.quality === q })).join('');
     $$('.chip', box).forEach((c) => (c.onclick = () => {
@@ -838,14 +854,16 @@ function syncPlaylistSel() {
 function playlistLabel() {
   if (S.mode === 'audio') return `${S.audio.name} · ${S.audio.sub}`;
   const fpsText = S.fps === '30' ? ' · 30fps' : '';
-  return `MP4 · ${S.quality.label}${fpsText}`;
+  const muteBadge = S.mode === 'mute' ? ' (дуугүй 🔇)' : '';
+  return `MP4${muteBadge} · ${S.quality.label}${fpsText}`;
 }
 
 function updatePlaylistSummary() {
   const p = S.info;
   if (!p || p.type !== 'playlist') return;
   const dur = p.entries.filter((e) => S.sel.has(e.index)).reduce((a, e) => a + (e.duration || 0), 0);
-  $('#sumMain').innerHTML = `${ic(S.mode === 'audio' ? 'music' : 'video')}${esc(playlistLabel())}`;
+  const icon = S.mode === 'audio' ? 'music' : (S.mode === 'mute' ? 'mute' : 'video');
+  $('#sumMain').innerHTML = `${ic(icon)}${esc(playlistLabel())}`;
   $('#sumSub').textContent = `${S.sel.size} видео${dur ? '  ·  ' + fmtTime(dur) + ' нийт урт' : ''}`;
 }
 
@@ -854,14 +872,15 @@ async function downloadPlaylist() {
   const btn = $('#dlBtn');
   if (btn.disabled || !S.sel.size) return;
   const items = S.sel.size === p.count ? null : [...S.sel].sort((a, b) => a - b);
+  const isVid = S.mode === 'video' || S.mode === 'mute';
   btn.disabled = true;
   try {
     await api('/download', {
       url: p.url, playlist: true, items,
       title: p.title, thumbnail: p.thumbnail,
       mode: S.mode,
-      height: S.mode === 'video' ? S.quality.height : null,
-      fps: S.mode === 'video' && S.fps ? parseInt(S.fps, 10) : null,
+      height: isVid ? S.quality.height : null,
+      fps: isVid && S.fps ? parseInt(S.fps, 10) : null,
       audio_format: S.audio.fmt, bitrate: S.audio.br,
       label: `Playlist · ${S.sel.size} видео · ${playlistLabel()}`,
     });
@@ -926,7 +945,7 @@ function createJobEl(j) {
   const el = document.createElement('div');
   el.className = 'job';
   el.innerHTML = `
-    <div class="job-thumb">${j.thumbnail ? `<img src="${esc(j.thumbnail)}" alt="">` : ''}<span class="job-type">${ic(j.mode === 'audio' ? 'music' : 'video')}</span></div>
+    <div class="job-thumb">${j.thumbnail ? `<img src="${esc(j.thumbnail)}" alt="">` : ''}<span class="job-type">${ic(j.mode === 'audio' ? 'music' : (j.mode === 'mute' ? 'mute' : 'video'))}</span></div>
     <div class="job-body">
       <div class="job-title" title="${esc(j.title)}">${esc(j.title)}</div>
       <div class="job-label">${esc(j.label || '')}</div>

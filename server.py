@@ -78,7 +78,7 @@ def api_download():
         "title": b.get("title"),
         "thumbnail": b.get("thumbnail"),
         "label": b.get("label"),
-        "mode": "audio" if b.get("mode") == "audio" else "video",
+        "mode": b.get("mode") if b.get("mode") in ("video", "audio", "mute") else "video",
         "height": b.get("height"),
         "fps": int(b["fps"]) if b.get("fps") else None,
         "audio_format": b.get("audio_format") if b.get("audio_format") in ("mp3", "m4a") else "mp3",

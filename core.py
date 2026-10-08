@@ -239,6 +239,7 @@ def _video_info(info: dict, url: str) -> dict:
             "badge": badge,
             "fps": int(q["fps"] or 0),
             "size": (q["vsize"] + audio_size) or None,
+            "vsize": q["vsize"] or None,
         })
 
     return {
@@ -263,6 +264,8 @@ def _video_info(info: dict, url: str) -> dict:
 PP_LABELS = {
     "Merger": "Видео, дууг нэгтгэж байна…",
     "FFmpegMerger": "Видео, дууг нэгтгэж байна…",
+    "VideoRemuxer": "MP4 формат руу хөрвүүлж байна…",
+    "FFmpegVideoRemuxer": "MP4 формат руу хөрвүүлж байна…",
     "ExtractAudio": "Аудио хөрвүүлж байна…",
     "FFmpegExtractAudio": "Аудио хөрвүүлж байна…",
     "EmbedThumbnail": "Нүүр зураг оруулж байна…",
@@ -466,6 +469,8 @@ class JobManager:
             name = "%(title)s"
             if section:
                 name += f" [{fmt_time(start or 0, '-')}_{fmt_time(end, '-') if end is not None else 'end'}]"
+            if r.get("mode") == "mute":
+                name += " [mute]"
             outtmpl = os.path.join(job.out_dir, name + ".%(ext)s")
 
         import tempfile
@@ -523,6 +528,18 @@ class JobManager:
                 {"key": "EmbedThumbnail"},
             ]
             opts["writethumbnail"] = True
+        elif r.get("mode") == "mute":
+            h = r.get("height")
+            fps = r.get("fps")
+            lim = f"[height<={int(h)}]" if h else ""
+            opts["format"] = f"bestvideo{lim}/bestvideo/best"
+            if fps:
+                fps_val = int(fps)
+                opts["format_sort"] = ["res", f"fps:{fps_val}", "vcodec:h264"]
+            else:
+                opts["format_sort"] = ["res", "vcodec:h264"]
+            opts["remuxvideo"] = "mp4"
+            opts["merge_output_format"] = "mp4"
         else:
             h = r.get("height")
             fps = r.get("fps")
